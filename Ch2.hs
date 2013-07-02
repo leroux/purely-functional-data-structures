@@ -1,9 +1,15 @@
 module Ch2 where
 
+import Prelude hiding (lookup)
+
+--- 2.1
+suffixes :: [a] -> [[a]]
+suffixes xs = xs : suffixes (Prelude.tail xs)
+
+--- Stack
 infixr 5 :-:
+
 data CustomStack a = Nil | a :-: CustomStack a deriving (Show)
-data Tree a = EmptyTree | Elem (Tree a) a (Tree a)
-type Set = Tree
 
 instance Show a => Show (Tree a) where
     show t = show' t 0
@@ -61,6 +67,10 @@ instance Stack CustomStack where
     update (_ :-: xs) 0 y = y :-: xs
     update (x :-: xs) i y = x :-: update xs (i - 1) y
 
+--- Tree, Set
+data Tree a = EmptyTree | Elem (Tree a) a (Tree a)
+type Set = Tree
+
 class UnbalancedSet s where
     emptySet :: s a
     insert :: (Eq a, Ord a) => a -> s a -> s a
@@ -69,6 +79,7 @@ class UnbalancedSet s where
 instance UnbalancedSet Tree where
     emptySet = EmptyTree
 
+    --- 2.3, 2.4
     insert x EmptyTree = Elem EmptyTree x EmptyTree
     insert x t@(Elem left a right)
       | x < a = Elem (insert x left) a right
@@ -80,6 +91,7 @@ instance UnbalancedSet Tree where
               | x < a' = Elem (insert' left' candidate) a' right'
               | otherwise = Elem left' a' (insert' right' t')
 
+    --- 2.2
     member _ EmptyTree = False
     member x (Elem left a right)
       | x < a = member x left
@@ -89,15 +101,44 @@ instance UnbalancedSet Tree where
               | x < a' = member' left' candidate
               | otherwise = member' right' a'
 
-suffixes :: [a] -> [[a]]
-suffixes xs = xs : case xs of
-                     [] -> []
-                     (_:xs') -> suffixes xs'
 
 depth :: Tree a -> Int
 depth EmptyTree = 0
 depth (Elem left _ right) = 1 + max (depth left) (depth right)
 
+--- 2.5a
 complete :: a -> Int -> Tree a
 complete _ 0 = EmptyTree
 complete x d = Elem (complete x $ d - 1) x (complete x $ d - 1)
+
+--- 2.5b
+-- ???
+---
+
+--- 2.6
+class FiniteMap m where
+    empty :: m a
+    bind :: (Eq k, Ord k) => k -> v -> m (k, v) -> m (k, v)
+    lookup :: (Eq k, Ord k) => k -> m (k, v) -> Maybe v
+
+instance FiniteMap Tree where
+    empty = EmptyTree
+
+    bind k v EmptyTree = Elem EmptyTree (k, v) EmptyTree
+    bind k v t@(Elem left a@(k', _) right)
+      | k < k' = Elem (bind k v left) a right
+      | otherwise = Elem left a (bind' right t)
+      where bind' EmptyTree (Elem _ (k1', _) right')
+              | k == k1' = error "insert: key exists"
+              | otherwise = Elem EmptyTree (k, v) right'
+            bind' t'@(Elem left' a'@(k1', _) right') candidate
+              | k < k1' = Elem (bind' left' candidate) a' right'
+              | otherwise = Elem left' a' (bind' right' t')
+
+    lookup = undefined
+    {-
+    lookup _ EmptyTree = error "lookup: key not found"
+    lookup k (Elem left a@(k', _) right)
+      | k < k' = lookup k left
+      | otherwise = lookup' right a
+    -}
