@@ -1,11 +1,14 @@
 module Ch2 where
 
 infixr 5 :-:
+data CustomStack a = Nil | a :-: CustomStack a deriving (Show)
+data Tree a = EmptyTree | Elem (Tree a) a (Tree a)
+type Set = Tree
 
-data CustomStack a =
-    Nil | a :-: CustomStack a deriving (Show)
-
-data Tree a = EmptyTree | Elem (Tree a) a (Tree a) deriving (Show)
+instance Show a => Show (Tree a) where
+    show t = show' t 0
+      where show' EmptyTree indent = replicate indent '\t' ++ "∅"
+            show' (Elem left a right) indent = replicate indent '\t' ++ "(" ++ show a ++ "\n" ++ show' left (indent + 1) ++ "\n" ++ show' right (indent + 1) ++ ")"
 
 class Stack st where
     emptyStack :: st a
@@ -16,11 +19,6 @@ class Stack st where
     (^++) :: st a -> st a -> st a
     update :: st a -> Int -> a -> st a
 
-class Set s where
-    emptySet :: s a
-    insert :: (Eq a, Ord a) => a -> s a -> s a
-    member :: (Eq a, Ord a) => a -> s a -> Bool
-
 instance Stack [] where
     emptyStack = []
 
@@ -28,6 +26,7 @@ instance Stack [] where
     isEmpty _ = False
 
     cons x xs = x : xs
+
     head [] = error "head: empty stack"
     head (x:_) = x
 
@@ -62,25 +61,43 @@ instance Stack CustomStack where
     update (_ :-: xs) 0 y = y :-: xs
     update (x :-: xs) i y = x :-: update xs (i - 1) y
 
+class UnbalancedSet s where
+    emptySet :: s a
+    insert :: (Eq a, Ord a) => a -> s a -> s a
+    member :: (Eq a, Ord a) => a -> s a -> Bool
+
+instance UnbalancedSet Tree where
+    emptySet = EmptyTree
+
+    insert x EmptyTree = Elem EmptyTree x EmptyTree
+    insert x t@(Elem left a right)
+      | x < a = Elem (insert x left) a right
+      | otherwise = Elem left a (insert' right t)
+      where insert' EmptyTree (Elem _ a' right')
+              | x == a' = error "insert: element exists"
+              | otherwise = Elem EmptyTree x right'
+            insert' t'@(Elem left' a' right') candidate
+              | x < a' = Elem (insert' left' candidate) a' right'
+              | otherwise = Elem left' a' (insert' right' t')
+
+    member _ EmptyTree = False
+    member x (Elem left a right)
+      | x < a = member x left
+      | otherwise = member' right a
+      where member' EmptyTree candidate = x == candidate
+            member' (Elem left' a' right') candidate
+              | x < a' = member' left' candidate
+              | otherwise = member' right' a'
+
 suffixes :: [a] -> [[a]]
 suffixes xs = xs : case xs of
                      [] -> []
                      (_:xs') -> suffixes xs'
 
-instance Set Tree where
-    emptySet = EmptyTree
+depth :: Tree a -> Int
+depth EmptyTree = 0
+depth (Elem left _ right) = 1 + max (depth left) (depth right)
 
-    insert x EmptyTree = Elem EmptyTree x EmptyTree
-    insert x (Elem left a right)
-        | x == a = Elem EmptyTree x EmptyTree
-        | x < a  = Elem (insert x left) a right
-        | x > a  = Elem left a (insert x right)
-
-    member _ EmptyTree = False
-    member x (Elem left a right)
-        | x < a = member x left
-        | otherwise = member' x right a
-        where member' x' EmptyTree saved = x' == saved
-              member' x' (Elem left' a' right') saved
-                  | x' < a' = member' x' left' saved
-                  | otherwise = member' x' right' a'
+complete :: a -> Int -> Tree a
+complete _ 0 = EmptyTree
+complete x d = Elem (complete x $ d - 1) x (complete x $ d - 1)
