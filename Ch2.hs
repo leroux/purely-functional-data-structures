@@ -67,6 +67,10 @@ instance Stack CustomStack where
     update (_ :-: xs) 0 y = y :-: xs
     update (x :-: xs) i y = x :-: update xs (i - 1) y
 
+instance Functor CustomStack where
+    fmap _ Nil = Nil
+    fmap f (x :-: xs) = f x :-: fmap f xs
+
 --- Tree, Set
 data Tree a = EmptyTree | Elem (Tree a) a (Tree a)
 type Set = Tree
@@ -84,9 +88,9 @@ instance UnbalancedSet Tree where
     insert x t@(Elem left a right)
       | x < a = Elem (insert x left) a right
       | otherwise = Elem left a (insert' right t)
-      where insert' EmptyTree (Elem _ a' right')
+      where insert' EmptyTree (Elem _ a' _)
               | x == a' = error "insert: element exists"
-              | otherwise = Elem EmptyTree x right'
+              | otherwise = Elem EmptyTree x EmptyTree
             insert' t'@(Elem left' a' right') candidate
               | x < a' = Elem (insert' left' candidate) a' right'
               | otherwise = Elem left' a' (insert' right' t')
@@ -101,6 +105,9 @@ instance UnbalancedSet Tree where
               | x < a' = member' left' candidate
               | otherwise = member' right' a'
 
+instance Functor Tree where
+    fmap _ EmptyTree = EmptyTree
+    fmap f (Elem left a right) = Elem (fmap f left) (f a) (fmap f right)
 
 depth :: Tree a -> Int
 depth EmptyTree = 0
@@ -128,17 +135,11 @@ instance FiniteMap Tree where
     bind k v t@(Elem left a@(k', _) right)
       | k < k' = Elem (bind k v left) a right
       | otherwise = Elem left a (bind' right t)
-      where bind' EmptyTree (Elem _ (k1', _) right')
+      where bind' EmptyTree (Elem _ (k1', _) _)
               | k == k1' = error "insert: key exists"
-              | otherwise = Elem EmptyTree (k, v) right'
+              | otherwise = Elem EmptyTree (k, v) EmptyTree
             bind' t'@(Elem left' a'@(k1', _) right') candidate
               | k < k1' = Elem (bind' left' candidate) a' right'
               | otherwise = Elem left' a' (bind' right' t')
 
     lookup = undefined
-    {-
-    lookup _ EmptyTree = error "lookup: key not found"
-    lookup k (Elem left a@(k', _) right)
-      | k < k' = lookup k left
-      | otherwise = lookup' right a
-    -}
